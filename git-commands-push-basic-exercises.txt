@@ -1,4 +1,4 @@
-       cd /Users/ronakronik/Documents/KKD/Technical/Udacity/Data-Engineering-Nanodegree
+       cd /Users/ronakronik/Documents/KKD/Technical/Udacity/Data-Engineering-Nanodegree/Basic-Exercises
   537  git init
   538  ls -al
   539  git status
