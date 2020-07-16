@@ -1,0 +1,11 @@
+       cd /Users/ronakronik/Documents/KKD/Technical/Udacity/Data-Engineering-Nanodegree
+  537  git init
+  538  ls -al
+  539  git status
+  540  git config --global user.name "Koushik K Das"
+  541  git add -A	(this adds all contents. For a specific "dir": git add dir
+  543  git status
+  544  git commit -m "Basic Exercise commit July 13, 2020"
+  545  git status
+  546  git remote add kkdtitu-basic-exercises https://github.com/kkdtitu/udacity-data-engineering-basic-exercises
+  547  git push -u kkdtitu-basic-exercises master
