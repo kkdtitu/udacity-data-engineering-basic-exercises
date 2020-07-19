@@ -1,4 +1,5 @@
        pip3 install notebook
+       pip3 install matplotlib
        jupyter notebook
        pip3 install boto3	
   668  ipython3 aws-sdk-api.py

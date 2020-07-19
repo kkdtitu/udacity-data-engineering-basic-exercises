@@ -1,0 +1,818 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# Exercise 4: Optimizing Redshift Table Design"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "%load_ext sql"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from time import time\n",
+    "import configparser\n",
+    "import matplotlib.pyplot as plt\n",
+    "import pandas as pd"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "config = configparser.ConfigParser()\n",
+    "config.read_file(open('dwh.cfg'))\n",
+    "#KEY=config.get('AWS','key')\n",
+    "#SECRET= config.get('AWS','secret')\n",
+    "\n",
+    "DWH_DB= config.get(\"DWH\",\"DWH_DB\")\n",
+    "DWH_DB_USER= config.get(\"DWH\",\"DWH_DB_USER\")\n",
+    "DWH_DB_PASSWORD= config.get(\"DWH\",\"DWH_DB_PASSWORD\")\n",
+    "DWH_PORT = config.get(\"DWH\",\"DWH_PORT\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# STEP 1: Get the params of the created redshift cluster \n",
+    "- We need:\n",
+    "    - The redshift cluster <font color='red'>endpoint</font>\n",
+    "    - The <font color='red'>IAM role ARN</font> that give access to Redshift to read from S3"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# FILL IN THE REDSHIFT ENDPOINT HERE\n",
+    "# e.g. DWH_ENDPOINT=\"redshift-cluster-1.csmamz5zxmle.us-west-2.redshift.amazonaws.com\" \n",
+    "DWH_ENDPOINT=\"udacity-redshift-cluster-1.c7g6xzy0gs0p.us-east-1.redshift.amazonaws.com\"\n",
+    "    \n",
+    "#FILL IN THE IAM ROLE ARN you got in step 2.2 of the previous exercise\n",
+    "#e.g DWH_ROLE_ARN=\"arn:aws:iam::988332130976:role/dwhRole\"\n",
+    "DWH_ROLE_ARN=\"arn:aws:iam::311694234399:role/udacity-role-redshift_read-s3-1\""
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# STEP 2: Connect to the Redshift Cluster"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "postgresql://udacity-redshift-user-1:Passw0rd@udacity-redshift-cluster-1.c7g6xzy0gs0p.us-east-1.redshift.amazonaws.com:5439/udacity-redshift-db-1\n"
+     ]
+    }
+   ],
+   "source": [
+    "import os \n",
+    "conn_string=\"postgresql://{}:{}@{}:{}/{}\".format(DWH_DB_USER, DWH_DB_PASSWORD, DWH_ENDPOINT, DWH_PORT,DWH_DB)\n",
+    "print(conn_string)\n",
+    "%sql $conn_string"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "toc-hr-collapsed": true
+   },
+   "source": [
+    "# STEP 3: Create Tables\n",
+    "- We are going to use a benchmarking data set common for benchmarking star schemas in data warehouses.\n",
+    "- The data is pre-loaded in a public bucket on the `us-west-2` region\n",
+    "- Our examples will be based on the Amazon Redshfit tutorial but in a scripted environment in our workspace.\n",
+    "\n",
+    "![afa](https://docs.aws.amazon.com/redshift/latest/dg/images/tutorial-optimize-tables-ssb-data-model.png)\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 3.1 Create tables (no distribution strategy) in the `nodist` schema"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 7,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      " * postgresql://udacity-redshift-user-1:***@udacity-redshift-cluster-1.c7g6xzy0gs0p.us-east-1.redshift.amazonaws.com:5439/udacity-redshift-db-1\n",
+      "Done.\n",
+      "Done.\n",
+      "Done.\n",
+      "Done.\n",
+      "Done.\n",
+      "Done.\n",
+      "Done.\n",
+      "Done.\n",
+      "Done.\n",
+      "Done.\n",
+      "Done.\n",
+      "Done.\n",
+      "Done.\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "[]"
+      ]
+     },
+     "execution_count": 7,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "%%sql \n",
+    "CREATE SCHEMA IF NOT EXISTS nodist;\n",
+    "SET search_path TO nodist;\n",
+    "\n",
+    "DROP TABLE IF EXISTS part cascade;\n",
+    "DROP TABLE IF EXISTS supplier;\n",
+    "DROP TABLE IF EXISTS supplier;\n",
+    "DROP TABLE IF EXISTS customer;\n",
+    "DROP TABLE IF EXISTS dwdate;\n",
+    "DROP TABLE IF EXISTS lineorder;\n",
+    "\n",
+    "CREATE TABLE part \n",
+    "(\n",
+    "  p_partkey     INTEGER NOT NULL,\n",
+    "  p_name        VARCHAR(22) NOT NULL,\n",
+    "  p_mfgr        VARCHAR(6) NOT NULL,\n",
+    "  p_category    VARCHAR(7) NOT NULL,\n",
+    "  p_brand1      VARCHAR(9) NOT NULL,\n",
+    "  p_color       VARCHAR(11) NOT NULL,\n",
+    "  p_type        VARCHAR(25) NOT NULL,\n",
+    "  p_size        INTEGER NOT NULL,\n",
+    "  p_container   VARCHAR(10) NOT NULL\n",
+    ");\n",
+    "\n",
+    "CREATE TABLE supplier \n",
+    "(\n",
+    "  s_suppkey   INTEGER NOT NULL,\n",
+    "  s_name      VARCHAR(25) NOT NULL,\n",
+    "  s_address   VARCHAR(25) NOT NULL,\n",
+    "  s_city      VARCHAR(10) NOT NULL,\n",
+    "  s_nation    VARCHAR(15) NOT NULL,\n",
+    "  s_region    VARCHAR(12) NOT NULL,\n",
+    "  s_phone     VARCHAR(15) NOT NULL\n",
+    ");\n",
+    "\n",
+    "CREATE TABLE customer \n",
+    "(\n",
+    "  c_custkey      INTEGER NOT NULL,\n",
+    "  c_name         VARCHAR(25) NOT NULL,\n",
+    "  c_address      VARCHAR(25) NOT NULL,\n",
+    "  c_city         VARCHAR(10) NOT NULL,\n",
+    "  c_nation       VARCHAR(15) NOT NULL,\n",
+    "  c_region       VARCHAR(12) NOT NULL,\n",
+    "  c_phone        VARCHAR(15) NOT NULL,\n",
+    "  c_mktsegment   VARCHAR(10) NOT NULL\n",
+    ");\n",
+    "\n",
+    "CREATE TABLE dwdate \n",
+    "(\n",
+    "  d_datekey            INTEGER NOT NULL,\n",
+    "  d_date               VARCHAR(19) NOT NULL,\n",
+    "  d_dayofweek          VARCHAR(10) NOT NULL,\n",
+    "  d_month              VARCHAR(10) NOT NULL,\n",
+    "  d_year               INTEGER NOT NULL,\n",
+    "  d_yearmonthnum       INTEGER NOT NULL,\n",
+    "  d_yearmonth          VARCHAR(8) NOT NULL,\n",
+    "  d_daynuminweek       INTEGER NOT NULL,\n",
+    "  d_daynuminmonth      INTEGER NOT NULL,\n",
+    "  d_daynuminyear       INTEGER NOT NULL,\n",
+    "  d_monthnuminyear     INTEGER NOT NULL,\n",
+    "  d_weeknuminyear      INTEGER NOT NULL,\n",
+    "  d_sellingseason      VARCHAR(13) NOT NULL,\n",
+    "  d_lastdayinweekfl    VARCHAR(1) NOT NULL,\n",
+    "  d_lastdayinmonthfl   VARCHAR(1) NOT NULL,\n",
+    "  d_holidayfl          VARCHAR(1) NOT NULL,\n",
+    "  d_weekdayfl          VARCHAR(1) NOT NULL\n",
+    ");\n",
+    "CREATE TABLE lineorder \n",
+    "(\n",
+    "  lo_orderkey          INTEGER NOT NULL,\n",
+    "  lo_linenumber        INTEGER NOT NULL,\n",
+    "  lo_custkey           INTEGER NOT NULL,\n",
+    "  lo_partkey           INTEGER NOT NULL,\n",
+    "  lo_suppkey           INTEGER NOT NULL,\n",
+    "  lo_orderdate         INTEGER NOT NULL,\n",
+    "  lo_orderpriority     VARCHAR(15) NOT NULL,\n",
+    "  lo_shippriority      VARCHAR(1) NOT NULL,\n",
+    "  lo_quantity          INTEGER NOT NULL,\n",
+    "  lo_extendedprice     INTEGER NOT NULL,\n",
+    "  lo_ordertotalprice   INTEGER NOT NULL,\n",
+    "  lo_discount          INTEGER NOT NULL,\n",
+    "  lo_revenue           INTEGER NOT NULL,\n",
+    "  lo_supplycost        INTEGER NOT NULL,\n",
+    "  lo_tax               INTEGER NOT NULL,\n",
+    "  lo_commitdate        INTEGER NOT NULL,\n",
+    "  lo_shipmode          VARCHAR(10) NOT NULL\n",
+    ");"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 3.1 Create tables (with a distribution strategy) in the `dist` schema"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 8,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      " * postgresql://udacity-redshift-user-1:***@udacity-redshift-cluster-1.c7g6xzy0gs0p.us-east-1.redshift.amazonaws.com:5439/udacity-redshift-db-1\n",
+      "Done.\n",
+      "Done.\n",
+      "Done.\n",
+      "Done.\n",
+      "Done.\n",
+      "Done.\n",
+      "Done.\n",
+      "Done.\n",
+      "Done.\n",
+      "Done.\n",
+      "Done.\n",
+      "Done.\n",
+      "Done.\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "[]"
+      ]
+     },
+     "execution_count": 8,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "%%sql\n",
+    "\n",
+    "CREATE SCHEMA IF NOT EXISTS dist;\n",
+    "SET search_path TO dist;\n",
+    "\n",
+    "DROP TABLE IF EXISTS part cascade;\n",
+    "DROP TABLE IF EXISTS supplier;\n",
+    "DROP TABLE IF EXISTS supplier;\n",
+    "DROP TABLE IF EXISTS customer;\n",
+    "DROP TABLE IF EXISTS dwdate;\n",
+    "DROP TABLE IF EXISTS lineorder;\n",
+    "\n",
+    "CREATE TABLE part (\n",
+    "  p_partkey         integer         not null    sortkey distkey,\n",
+    "  p_name            varchar(22)     not null,\n",
+    "  p_mfgr            varchar(6)      not null,\n",
+    "  p_category        varchar(7)      not null,\n",
+    "  p_brand1          varchar(9)      not null,\n",
+    "  p_color           varchar(11)     not null,\n",
+    "  p_type            varchar(25)     not null,\n",
+    "  p_size            integer         not null,\n",
+    "  p_container       varchar(10)     not null\n",
+    ");\n",
+    "\n",
+    "\n",
+    "CREATE TABLE supplier (\n",
+    "  s_suppkey     \tinteger        not null sortkey,\n",
+    "  s_name        \tvarchar(25)    not null,\n",
+    "  s_address     \tvarchar(25)    not null,\n",
+    "  s_city        \tvarchar(10)    not null,\n",
+    "  s_nation      \tvarchar(15)    not null,\n",
+    "  s_region      \tvarchar(12)    not null,\n",
+    "  s_phone       \tvarchar(15)    not null)\n",
+    "diststyle all;\n",
+    "\n",
+    "CREATE TABLE customer (\n",
+    "  c_custkey     \tinteger        not null sortkey,\n",
+    "  c_name        \tvarchar(25)    not null,\n",
+    "  c_address     \tvarchar(25)    not null,\n",
+    "  c_city        \tvarchar(10)    not null,\n",
+    "  c_nation      \tvarchar(15)    not null,\n",
+    "  c_region      \tvarchar(12)    not null,\n",
+    "  c_phone       \tvarchar(15)    not null,\n",
+    "  c_mktsegment      varchar(10)    not null)\n",
+    "diststyle all;\n",
+    "\n",
+    "CREATE TABLE dwdate (\n",
+    "  d_datekey            integer       not null sortkey,\n",
+    "  d_date               varchar(19)   not null,\n",
+    "  d_dayofweek\t      varchar(10)   not null,\n",
+    "  d_month      \t    varchar(10)   not null,\n",
+    "  d_year               integer       not null,\n",
+    "  d_yearmonthnum       integer  \t not null,\n",
+    "  d_yearmonth          varchar(8)\tnot null,\n",
+    "  d_daynuminweek       integer       not null,\n",
+    "  d_daynuminmonth      integer       not null,\n",
+    "  d_daynuminyear       integer       not null,\n",
+    "  d_monthnuminyear     integer       not null,\n",
+    "  d_weeknuminyear      integer       not null,\n",
+    "  d_sellingseason      varchar(13)    not null,\n",
+    "  d_lastdayinweekfl    varchar(1)    not null,\n",
+    "  d_lastdayinmonthfl   varchar(1)    not null,\n",
+    "  d_holidayfl          varchar(1)    not null,\n",
+    "  d_weekdayfl          varchar(1)    not null)\n",
+    "diststyle all;\n",
+    "\n",
+    "CREATE TABLE lineorder (\n",
+    "  lo_orderkey      \t    integer     \tnot null,\n",
+    "  lo_linenumber        \tinteger     \tnot null,\n",
+    "  lo_custkey           \tinteger     \tnot null,\n",
+    "  lo_partkey           \tinteger     \tnot null distkey,\n",
+    "  lo_suppkey           \tinteger     \tnot null,\n",
+    "  lo_orderdate         \tinteger     \tnot null sortkey,\n",
+    "  lo_orderpriority     \tvarchar(15)     not null,\n",
+    "  lo_shippriority      \tvarchar(1)      not null,\n",
+    "  lo_quantity          \tinteger     \tnot null,\n",
+    "  lo_extendedprice     \tinteger     \tnot null,\n",
+    "  lo_ordertotalprice   \tinteger     \tnot null,\n",
+    "  lo_discount          \tinteger     \tnot null,\n",
+    "  lo_revenue           \tinteger     \tnot null,\n",
+    "  lo_supplycost        \tinteger     \tnot null,\n",
+    "  lo_tax               \tinteger     \tnot null,\n",
+    "  lo_commitdate         integer         not null,\n",
+    "  lo_shipmode          \tvarchar(10)     not null\n",
+    ");"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "toc-hr-collapsed": true
+   },
+   "source": [
+    "# STEP 4: Copying tables \n",
+    "\n",
+    "Our intent here is to run 5 COPY operations for the 5 tables respectively as show below.\n",
+    "\n",
+    "However, we want to do accomplish the following:\n",
+    "- Make sure that the `DWH_ROLE_ARN` is substituted with the correct value in each query\n",
+    "- Perform the data loading twice once for each schema (dist and nodist)\n",
+    "- Collect timing statistics to compare the insertion times\n",
+    "Thus, we have scripted the insertion as found below in the function `loadTables` which\n",
+    "returns a pandas dataframe containing timing statistics for the copy operations\n",
+    "\n",
+    "```sql\n",
+    "copy customer from 's3://awssampledbuswest2/ssbgz/customer' \n",
+    "credentials 'aws_iam_role=<DWH_ROLE_ARN>'\n",
+    "gzip region 'us-west-2';\n",
+    "\n",
+    "copy dwdate from 's3://awssampledbuswest2/ssbgz/dwdate' \n",
+    "credentials 'aws_iam_role=<DWH_ROLE_ARN>'\n",
+    "gzip region 'us-west-2';\n",
+    "\n",
+    "copy lineorder from 's3://awssampledbuswest2/ssbgz/lineorder' \n",
+    "credentials 'aws_iam_role=<DWH_ROLE_ARN>'\n",
+    "gzip region 'us-west-2';\n",
+    "\n",
+    "copy part from 's3://awssampledbuswest2/ssbgz/part' \n",
+    "credentials 'aws_iam_role=<DWH_ROLE_ARN>'\n",
+    "gzip region 'us-west-2';\n",
+    "\n",
+    "copy supplier from 's3://awssampledbuswest2/ssbgz/supplier' \n",
+    "credentials 'aws_iam_role=<DWH_ROLE_ARN>'\n",
+    "gzip region 'us-west-2';\n",
+    "```\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 4.1 Automate  the copying"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 9,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def loadTables(schema, tables):\n",
+    "    loadTimes = []\n",
+    "    SQL_SET_SCEMA = \"SET search_path TO {};\".format(schema)\n",
+    "    %sql $SQL_SET_SCEMA\n",
+    "    \n",
+    "    for table in tables:\n",
+    "        SQL_COPY = \"\"\"\n",
+    "copy {} from 's3://awssampledbuswest2/ssbgz/{}' \n",
+    "credentials 'aws_iam_role={}'\n",
+    "gzip region 'us-west-2';\n",
+    "        \"\"\".format(table,table, DWH_ROLE_ARN)\n",
+    "\n",
+    "        print(\"======= LOADING TABLE: ** {} ** IN SCHEMA ==> {} =======\".format(table, schema))\n",
+    "        print(SQL_COPY)\n",
+    "\n",
+    "        t0 = time()\n",
+    "        %sql $SQL_COPY\n",
+    "        loadTime = time()-t0\n",
+    "        loadTimes.append(loadTime)\n",
+    "\n",
+    "        print(\"=== DONE IN: {0:.2f} sec\\n\".format(loadTime))\n",
+    "    return pd.DataFrame({\"table\":tables, \"loadtime_\"+schema:loadTimes}).set_index('table')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 10,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      " * postgresql://udacity-redshift-user-1:***@udacity-redshift-cluster-1.c7g6xzy0gs0p.us-east-1.redshift.amazonaws.com:5439/udacity-redshift-db-1\n",
+      "Done.\n",
+      "======= LOADING TABLE: ** customer ** IN SCHEMA ==> nodist =======\n",
+      "\n",
+      "copy customer from 's3://awssampledbuswest2/ssbgz/customer' \n",
+      "credentials 'aws_iam_role=arn:aws:iam::311694234399:role/udacity-role-redshift_read-s3-1'\n",
+      "gzip region 'us-west-2';\n",
+      "        \n",
+      " * postgresql://udacity-redshift-user-1:***@udacity-redshift-cluster-1.c7g6xzy0gs0p.us-east-1.redshift.amazonaws.com:5439/udacity-redshift-db-1\n",
+      "Done.\n",
+      "=== DONE IN: 13.98 sec\n",
+      "\n",
+      "======= LOADING TABLE: ** dwdate ** IN SCHEMA ==> nodist =======\n",
+      "\n",
+      "copy dwdate from 's3://awssampledbuswest2/ssbgz/dwdate' \n",
+      "credentials 'aws_iam_role=arn:aws:iam::311694234399:role/udacity-role-redshift_read-s3-1'\n",
+      "gzip region 'us-west-2';\n",
+      "        \n",
+      " * postgresql://udacity-redshift-user-1:***@udacity-redshift-cluster-1.c7g6xzy0gs0p.us-east-1.redshift.amazonaws.com:5439/udacity-redshift-db-1\n",
+      "Done.\n",
+      "=== DONE IN: 2.66 sec\n",
+      "\n",
+      "======= LOADING TABLE: ** supplier ** IN SCHEMA ==> nodist =======\n",
+      "\n",
+      "copy supplier from 's3://awssampledbuswest2/ssbgz/supplier' \n",
+      "credentials 'aws_iam_role=arn:aws:iam::311694234399:role/udacity-role-redshift_read-s3-1'\n",
+      "gzip region 'us-west-2';\n",
+      "        \n",
+      " * postgresql://udacity-redshift-user-1:***@udacity-redshift-cluster-1.c7g6xzy0gs0p.us-east-1.redshift.amazonaws.com:5439/udacity-redshift-db-1\n",
+      "Done.\n",
+      "=== DONE IN: 7.91 sec\n",
+      "\n",
+      "======= LOADING TABLE: ** part ** IN SCHEMA ==> nodist =======\n",
+      "\n",
+      "copy part from 's3://awssampledbuswest2/ssbgz/part' \n",
+      "credentials 'aws_iam_role=arn:aws:iam::311694234399:role/udacity-role-redshift_read-s3-1'\n",
+      "gzip region 'us-west-2';\n",
+      "        \n",
+      " * postgresql://udacity-redshift-user-1:***@udacity-redshift-cluster-1.c7g6xzy0gs0p.us-east-1.redshift.amazonaws.com:5439/udacity-redshift-db-1\n",
+      "Done.\n",
+      "=== DONE IN: 6.85 sec\n",
+      "\n",
+      "======= LOADING TABLE: ** lineorder ** IN SCHEMA ==> nodist =======\n",
+      "\n",
+      "copy lineorder from 's3://awssampledbuswest2/ssbgz/lineorder' \n",
+      "credentials 'aws_iam_role=arn:aws:iam::311694234399:role/udacity-role-redshift_read-s3-1'\n",
+      "gzip region 'us-west-2';\n",
+      "        \n",
+      " * postgresql://udacity-redshift-user-1:***@udacity-redshift-cluster-1.c7g6xzy0gs0p.us-east-1.redshift.amazonaws.com:5439/udacity-redshift-db-1\n",
+      "Done.\n",
+      "=== DONE IN: 899.07 sec\n",
+      "\n",
+      " * postgresql://udacity-redshift-user-1:***@udacity-redshift-cluster-1.c7g6xzy0gs0p.us-east-1.redshift.amazonaws.com:5439/udacity-redshift-db-1\n",
+      "Done.\n",
+      "======= LOADING TABLE: ** customer ** IN SCHEMA ==> dist =======\n",
+      "\n",
+      "copy customer from 's3://awssampledbuswest2/ssbgz/customer' \n",
+      "credentials 'aws_iam_role=arn:aws:iam::311694234399:role/udacity-role-redshift_read-s3-1'\n",
+      "gzip region 'us-west-2';\n",
+      "        \n",
+      " * postgresql://udacity-redshift-user-1:***@udacity-redshift-cluster-1.c7g6xzy0gs0p.us-east-1.redshift.amazonaws.com:5439/udacity-redshift-db-1\n",
+      "Done.\n",
+      "=== DONE IN: 21.61 sec\n",
+      "\n",
+      "======= LOADING TABLE: ** dwdate ** IN SCHEMA ==> dist =======\n",
+      "\n",
+      "copy dwdate from 's3://awssampledbuswest2/ssbgz/dwdate' \n",
+      "credentials 'aws_iam_role=arn:aws:iam::311694234399:role/udacity-role-redshift_read-s3-1'\n",
+      "gzip region 'us-west-2';\n",
+      "        \n",
+      " * postgresql://udacity-redshift-user-1:***@udacity-redshift-cluster-1.c7g6xzy0gs0p.us-east-1.redshift.amazonaws.com:5439/udacity-redshift-db-1\n",
+      "Done.\n",
+      "=== DONE IN: 1.86 sec\n",
+      "\n",
+      "======= LOADING TABLE: ** supplier ** IN SCHEMA ==> dist =======\n",
+      "\n",
+      "copy supplier from 's3://awssampledbuswest2/ssbgz/supplier' \n",
+      "credentials 'aws_iam_role=arn:aws:iam::311694234399:role/udacity-role-redshift_read-s3-1'\n",
+      "gzip region 'us-west-2';\n",
+      "        \n",
+      " * postgresql://udacity-redshift-user-1:***@udacity-redshift-cluster-1.c7g6xzy0gs0p.us-east-1.redshift.amazonaws.com:5439/udacity-redshift-db-1\n",
+      "Done.\n",
+      "=== DONE IN: 10.50 sec\n",
+      "\n",
+      "======= LOADING TABLE: ** part ** IN SCHEMA ==> dist =======\n",
+      "\n",
+      "copy part from 's3://awssampledbuswest2/ssbgz/part' \n",
+      "credentials 'aws_iam_role=arn:aws:iam::311694234399:role/udacity-role-redshift_read-s3-1'\n",
+      "gzip region 'us-west-2';\n",
+      "        \n",
+      " * postgresql://udacity-redshift-user-1:***@udacity-redshift-cluster-1.c7g6xzy0gs0p.us-east-1.redshift.amazonaws.com:5439/udacity-redshift-db-1\n",
+      "Done.\n",
+      "=== DONE IN: 8.94 sec\n",
+      "\n",
+      "======= LOADING TABLE: ** lineorder ** IN SCHEMA ==> dist =======\n",
+      "\n",
+      "copy lineorder from 's3://awssampledbuswest2/ssbgz/lineorder' \n",
+      "credentials 'aws_iam_role=arn:aws:iam::311694234399:role/udacity-role-redshift_read-s3-1'\n",
+      "gzip region 'us-west-2';\n",
+      "        \n",
+      " * postgresql://udacity-redshift-user-1:***@udacity-redshift-cluster-1.c7g6xzy0gs0p.us-east-1.redshift.amazonaws.com:5439/udacity-redshift-db-1\n",
+      "Done.\n",
+      "=== DONE IN: 1186.04 sec\n",
+      "\n"
+     ]
+    }
+   ],
+   "source": [
+    "#-- List of the tables to be loaded\n",
+    "tables = [\"customer\",\"dwdate\",\"supplier\", \"part\", \"lineorder\"]\n",
+    "\n",
+    "#-- Insertion twice for each schema (WARNING!! EACH CAN TAKE MORE THAN 10 MINUTES!!!)\n",
+    "nodistStats = loadTables(\"nodist\", tables)\n",
+    "distStats = loadTables(\"dist\", tables)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 4.1 Compare the load performance results"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 11,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "image/png": "iVBORw0KGgoAAAANSUhEUgAAAX0AAAErCAYAAAAyrlO7AAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAALEgAACxIB0t1+/AAAADh0RVh0U29mdHdhcmUAbWF0cGxvdGxpYiB2ZXJzaW9uMy4yLjIsIGh0dHA6Ly9tYXRwbG90bGliLm9yZy+WH4yJAAAgAElEQVR4nO3deZgV5Z328e8NNqCCYLQ1ChpQESQgiI2QS0UDBjUoaoIxigZcYpzRJPOaMKKTV73MRqKJMcugiGvCq6gjEaNxieIQHRcWW1GQgIixicqiMi5BBX/vH1UNh/Y0S5/m1Gnq/lxXX33qqeX8+tjeVD/11FOKCMzMLB9aZV2AmZmVj0PfzCxHHPpmZjni0DczyxGHvplZjmyXdQEbs+uuu0bXrl2zLsPMrEWZPXv2ioioLrauokO/a9euzJo1K+syzMxaFEmvNrbO3TtmZjni0DczyxGHvplZjmyyT1/SjcBxwLKI6J22XQkcD3wEvAycGRHvpOsuBs4G1gLfiYgH0/ZjgGuA1sCkiBjflII//vhj6urqWL16dVN2twrSrl07unTpQlVVVdalmOXG5lzIvRn4LXBrQdvDwMURsUbSz4CLgYsk9QK+Dnwe2BP4i6T9031+B3wJqANmSpoWEfO2tOC6ujo6dOhA165dkbSlu1uFiAhWrlxJXV0d3bp1y7ocs9zYZPdORMwA3mrQ9lBErEkXnwK6pK9PAG6PiA8j4hVgEXBI+rUoIhZHxEfA7em2W2z16tXssssuDvwWThK77LKL/2IzK7Pm6NM/C/hz+roz8FrBurq0rbH2T5F0rqRZkmYtX7686Bs68LcN/u9oVn4lhb6k/wDWAJObpxyIiIkRURMRNdXVRe8tMDOzJmryzVmSxpBc4B0a6yflXwrsVbBZl7SNjbSXpOu4+5rjMOssGT+8WY9nZlZJmhT66UicfweOiIgPClZNA/6fpF+SXMjtDjwDCOguqRtJ2H8dOK2UwrPUvn173nvvvZKPc/nll9O+fXu+//3vc/PNNzNs2DD23HNPAM455xwuvPBCevXqVfL7bMqYMWM47rjjGDly5Cbft2GdZtuS5jiJrPQTx80ZsnkbcCSwq6Q64DKS0TptgYfTftmnIuK8iHhR0h3APJJun/MjYm16nAuAB0mGbN4YES9uhZ+nxbr55pvp3bv3ujCdNGlSJnVs6n0b1mlmLcvmjN45NSL2iIiqiOgSETdExH4RsVdE9Eu/zivY/scRsW9E9IiIPxe03x8R+6frfry1fqByigjGjh1L79696dOnD1OmTAHgvffeY+jQofTv358+ffpwzz33rNvnxz/+Mfvvvz+HHXYYCxYsAOCuu+5i1qxZjBo1in79+vHPf/6TI488ct28Q+3bt2fs2LF8/vOf56ijjuKZZ57hyCOPZJ999mHatGkArF27lrFjxzJgwAAOPPBArrvuuo3WfcEFF9CjRw+OOuooli1btm5d/fuuXbuWMWPGrPvZrr766qJ1mlnLUtETrlW6u+++m9raWp577jlWrFjBgAEDGDx4MNXV1UydOpWddtqJFStWMGjQIEaMGMGcOXO4/fbbqa2tZc2aNfTv35+DDz6YkSNH8tvf/parrrqKmpqaT73P+++/z5AhQ7jyyis56aST+MEPfsDDDz/MvHnzGD16NCNGjOCGG26gY8eOzJw5kw8//JBDDz2UYcOGFR0DP3XqVBYsWMC8efN488036dWrF2edddYG29TW1rJ06VJeeOEFAN555x06deq00TrNrPI59Evw+OOPc+qpp9K6dWt23313jjjiCGbOnMmxxx7LJZdcwowZM2jVqhVLly7lzTff5K9//SsnnXQSO+ywAwAjRozYrPdp06YNxxxzDAB9+vShbdu2VFVV0adPH5YsWQLAQw89xPPPP89dd90FwKpVq1i4cGHR0J8xY8a6uvfcc0+GDBnyqW322WcfFi9ezLe//W2GDx/OsGHDmvIRmVmFcehvBZMnT2b58uXMnj2bqqoqunbtWtJNSFVVVevGtLdq1Yq2bduue71mTXKPXETwm9/8hqOPPrr0HwDYeeedee6553jwwQe59tprueOOO7jxxhub5dhmlp0WH/pZXik//PDDue666xg9ejRvvfUWM2bM4Morr2TKlCnstttuVFVVMX36dF59NZnaevDgwYwZM4aLL76YNWvWcO+99/Ktb30LgA4dOvDuu+82uZajjz6aCRMmMGTIEKqqqvjb3/5G586d2XHHHT+17eDBg9fVvWzZMqZPn85pp204mGrFihW0adOGr371q/To0YPTTz+9Weo0s2y1+NDP0kknncSTTz5J3759kcTPf/5zPvvZzzJq1CiOP/54+vTpQ01NDT179gSgf//+nHLK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\n",
+      "text/plain": [
+       "<Figure size 432x288 with 1 Axes>"
+      ]
+     },
+     "metadata": {
+      "needs_background": "light"
+     },
+     "output_type": "display_data"
+    }
+   ],
+   "source": [
+    "#-- Plotting of the timing results\n",
+    "stats = distStats.join(nodistStats)\n",
+    "stats.plot.bar()\n",
+    "plt.show()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# STEP 5: Compare Query Performance"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 12,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "oneDim_SQL =\"\"\"\n",
+    "set enable_result_cache_for_session to off;\n",
+    "SET search_path TO {};\n",
+    "\n",
+    "select sum(lo_extendedprice*lo_discount) as revenue\n",
+    "from lineorder, dwdate\n",
+    "where lo_orderdate = d_datekey\n",
+    "and d_year = 1997 \n",
+    "and lo_discount between 1 and 3 \n",
+    "and lo_quantity < 24;\n",
+    "\"\"\"\n",
+    "\n",
+    "twoDim_SQL=\"\"\"\n",
+    "set enable_result_cache_for_session to off;\n",
+    "SET search_path TO {};\n",
+    "\n",
+    "select sum(lo_revenue), d_year, p_brand1\n",
+    "from lineorder, dwdate, part, supplier\n",
+    "where lo_orderdate = d_datekey\n",
+    "and lo_partkey = p_partkey\n",
+    "and lo_suppkey = s_suppkey\n",
+    "and p_category = 'MFGR#12'\n",
+    "and s_region = 'AMERICA'\n",
+    "group by d_year, p_brand1\n",
+    "\"\"\"\n",
+    "\n",
+    "drill_SQL = \"\"\"\n",
+    "set enable_result_cache_for_session to off;\n",
+    "SET search_path TO {};\n",
+    "\n",
+    "select c_city, s_city, d_year, sum(lo_revenue) as revenue \n",
+    "from customer, lineorder, supplier, dwdate\n",
+    "where lo_custkey = c_custkey\n",
+    "and lo_suppkey = s_suppkey\n",
+    "and lo_orderdate = d_datekey\n",
+    "and (c_city='UNITED KI1' or\n",
+    "c_city='UNITED KI5')\n",
+    "and (s_city='UNITED KI1' or\n",
+    "s_city='UNITED KI5')\n",
+    "and d_yearmonth = 'Dec1997'\n",
+    "group by c_city, s_city, d_year\n",
+    "order by d_year asc, revenue desc;\n",
+    "\"\"\"\n",
+    "\n",
+    "\n",
+    "oneDimSameDist_SQL =\"\"\"\n",
+    "set enable_result_cache_for_session to off;\n",
+    "SET search_path TO {};\n",
+    "\n",
+    "select lo_orderdate, sum(lo_extendedprice*lo_discount) as revenue  \n",
+    "from lineorder, part\n",
+    "where lo_partkey  = p_partkey\n",
+    "group by lo_orderdate\n",
+    "order by lo_orderdate\n",
+    "\"\"\"\n",
+    "\n",
+    "def compareQueryTimes(schema):\n",
+    "    queryTimes  =[] \n",
+    "    for i,query in enumerate([oneDim_SQL, twoDim_SQL, drill_SQL, oneDimSameDist_SQL]):\n",
+    "        t0 = time()\n",
+    "        q = query.format(schema)\n",
+    "        %sql $q\n",
+    "        queryTime = time()-t0\n",
+    "        queryTimes.append(queryTime)\n",
+    "    return pd.DataFrame({\"query\":[\"oneDim\",\"twoDim\", \"drill\", \"oneDimSameDist\"], \"queryTime_\"+schema:queryTimes}).set_index('query')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 15,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      " * postgresql://udacity-redshift-user-1:***@udacity-redshift-cluster-1.c7g6xzy0gs0p.us-east-1.redshift.amazonaws.com:5439/udacity-redshift-db-1\n",
+      "Done.\n",
+      "Done.\n",
+      "1 rows affected.\n",
+      " * postgresql://udacity-redshift-user-1:***@udacity-redshift-cluster-1.c7g6xzy0gs0p.us-east-1.redshift.amazonaws.com:5439/udacity-redshift-db-1\n",
+      "Done.\n",
+      "Done.\n",
+      "280 rows affected.\n",
+      " * postgresql://udacity-redshift-user-1:***@udacity-redshift-cluster-1.c7g6xzy0gs0p.us-east-1.redshift.amazonaws.com:5439/udacity-redshift-db-1\n",
+      "Done.\n",
+      "Done.\n",
+      "4 rows affected.\n",
+      " * postgresql://udacity-redshift-user-1:***@udacity-redshift-cluster-1.c7g6xzy0gs0p.us-east-1.redshift.amazonaws.com:5439/udacity-redshift-db-1\n",
+      "Done.\n",
+      "Done.\n",
+      "2406 rows affected.\n",
+      " * postgresql://udacity-redshift-user-1:***@udacity-redshift-cluster-1.c7g6xzy0gs0p.us-east-1.redshift.amazonaws.com:5439/udacity-redshift-db-1\n",
+      "Done.\n",
+      "Done.\n",
+      "1 rows affected.\n",
+      " * postgresql://udacity-redshift-user-1:***@udacity-redshift-cluster-1.c7g6xzy0gs0p.us-east-1.redshift.amazonaws.com:5439/udacity-redshift-db-1\n",
+      "Done.\n",
+      "Done.\n",
+      "280 rows affected.\n",
+      " * postgresql://udacity-redshift-user-1:***@udacity-redshift-cluster-1.c7g6xzy0gs0p.us-east-1.redshift.amazonaws.com:5439/udacity-redshift-db-1\n",
+      "Done.\n",
+      "Done.\n",
+      "4 rows affected.\n",
+      " * postgresql://udacity-redshift-user-1:***@udacity-redshift-cluster-1.c7g6xzy0gs0p.us-east-1.redshift.amazonaws.com:5439/udacity-redshift-db-1\n",
+      "Done.\n",
+      "Done.\n",
+      "2406 rows affected.\n"
+     ]
+    }
+   ],
+   "source": [
+    "noDistQueryTimes = compareQueryTimes(\"nodist\")\n",
+    "distQueryTimes   = compareQueryTimes(\"dist\") "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 16,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "image/png": "iVBORw0KGgoAAAANSUhEUgAAAXAAAAFTCAYAAAAgIVenAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAALEgAACxIB0t1+/AAAADh0RVh0U29mdHdhcmUAbWF0cGxvdGxpYiB2ZXJzaW9uMy4yLjIsIGh0dHA6Ly9tYXRwbG90bGliLm9yZy+WH4yJAAAdrklEQVR4nO3de5iVZb3/8fdHDiGI5IbRXZINbg+IgDiAoQiVbrFSCdRUSosI2Zc787S1MPelROpPf/EzLX9XhYfMtqc0NU1TKiM8pQw4AYLiiZS0HPCEJALy3X+sxTSOwwyz1sM8c8/6vK6Ly/Uc5l5f1jAf77mf57lvRQRmZpae7fIuwMzMSuMANzNLlAPczCxRDnAzs0Q5wM3MEuUANzNLVNfWTpB0LXAk8GpEDC7u+x5wFLAeeA74akS80Vpb/fr1i+rq6rIKNjOrNAsWLFgVEVVN96u1+8AljQXeBq5vFODjgAciYqOkSwEi4lutFTFixIiora0tpX4zs4olaUFEjGi6v9UhlIiYB7zWZN+ciNhY3PwT0D+TKs3MbKtlMQY+BfhNBu2YmVkblBXgks4DNgI3tHDONEm1kmrr6+vLeTszM2uk1YuYWyJpMoWLm4dGCwPpETEbmA2FMfCmxzds2MDKlStZt25dqaVYQnr06EH//v3p1q1b3qWYJa+kAJf0GeCbwCcj4h/lFLBy5Up69+5NdXU1ksppyjq4iGD16tWsXLmSAQMG5F2OWfJaHUKRdBPwKLC3pJWSvgZcCfQGfiupTtKPSy1g3bp19O3b1+FdASTRt29f/7ZllpFWe+ARMamZ3ddkWYTDu3L4e22WHT+JaWaWqJIvYm4r1dPvybS9FZcckWl75Vi8eDEnnXQSAC+++CJ9+vShT58+9OvXj9NOO42lS5cyffr0nKtsXnV1NbW1tfTr14+DDjqIRx55ZIvnXnzxxXz7299ux+qsEmSdDdCx8qEUHS7AO4ONGzfStesHP9ohQ4ZQV1cHwOTJkznyyCM59thjG46PHz++3WosR0vhDQ5ws/biIRTgoosuYq+99uLggw9m0qRJzJo1i0996lNsfux/1apVbJ7D5b333uOcc85h5MiRDB06lJ/85CcAzJ07lzFjxjB+/HgGDRrE+eefz+WXX97wHueddx5XXHHFFmu47rrrOPXUU4FCuJ9yyimMGjWK3Xffnblz5zJlyhT22WcfJk+e3PA1c+bM4cADD6SmpoYvfOELvP3221tsv7q6mgsuuICamhqGDBnCU089BcBrr73GhAkTGDp0KKNGjWLRokUArF69mnHjxrHvvvsydepUGt8pusMOOwDwyiuvMHbsWIYNG8bgwYN58MEHmT59Ou+88w7Dhg3jS1/60tZ+C8ysBBUf4AsWLODmm2+mrq6Oe++9l/nz57d4/jXXXEOfPn2YP38+8+fP56qrruKFF14AYOHChVxxxRUsX76cKVOmcP311wOwadMmbr75Zk488cStruv111/n0Ucf5fvf/z7jx4/nzDPP5Mknn2Tx4sXU1dWxatUqLrzwQn73u9+xcOFCRowYwWWXXdZim/369WPhwoWccsopzJo1C4ALLriA/fffn0WLFnHxxRfz5S9/GYDvfOc7HHzwwTz55JNMnDiRF1988QPt3XjjjRx++OHU1dXx5z//mWHDhnHJJZew/fbbU1dXxw03bPH5LjPLQMUPoTz44INMnDiRnj17Aq0PY8yZM4dFixZx2223AfDmm2/yzDPP0L17dw444ICG+5urq6vp27cvTzzxBH//+9/Zf//96du371bXddRRRyGJIUOGsMsuuzBkyBAA9t13X1asWMHKlStZunQpo0ePBmD9+vUceOCBLbZ59NFHAzB8+HBuv/12AB566CF++ctfAnDIIYewevVq3nrrLebNm9dwzhFHHMFOO+30gfZGjhzJlClT2LBhAxMmTGDYsGFb/fczs/JVfIBvSdeuXdm0aRPA++5bjgh++MMfcvjhh7/v/Llz59KrV6/37Zs6dSrXXXcdf/vb35gyZUqb3v9DH/oQANttt13D683bGzdupEuXLhx22GHcdNNNbW6zS5cubNy4sZWzWzd27FjmzZvHPffcw+TJkznrrLMaevBmtu1V/BDK2LFjufPOO3nnnXdYs2YNd999N1DoQS9YsACgobcNcPjhh/OjH/2IDRs2ALB8+XLWrl3bbNsTJ07kvvvuY/78+R8I/HKNGjWKhx9+mGeffRaAtWvXsnz58ja3M2bMmIahjrlz59KvXz923HFHxo4dy4033gjAb37zG15//fUPfO1f/vIXdtllF04++WSmTp3KwoULAejWrVvD52Nm206H64G39209NTU1HH/88ey3337svPPOjBw5EoCzzz6b4447jtmzZ3PEEf+saerUqaxYsYKamhoigqqqKu68885m2+7evTuf/vSn+fCHP0yXLl0yrbuqqorrrruOSZMm8e677wJw4YUXstdee7WpnRkzZjBlyhSGDh1Kz549+dnPfgYUxsYnTZrEvvvuy0EHHcRuu+32ga+dO3cu3/ve9+jWrRs77LBDw5j/tGnTGDp0KDU1NR4HN9uGWl3QIUvNLeiwbNky9tlnn3aroTUzZsxghx124Oyzzy67rU2bNlFTU8Ott97KnnvumUF1nUNH+55bGir5PvCSF3Sw0ixdupQ99tiDQw891OFtZttEhxtCyduMGTMyaWfQoEE8//zzmbTVFhMnTmy4rXGzSy+9NPMxeDPLnwO8k7njjjvyLsHM2omHUMzMEuUANzNLlAPczCxRDnAzs0R1vIuYM/pk3N6b2bZXho4yH/jcuXOZNWsWv/71r7nrrrtafN+6ujpefvllPve5z23zusysbTpegHcCKc0HPn78+Bbft66ujtraWge4WQfkIRQqYz7w++67j4EDB1JTU9Mwy2DT97311lsZPHgw++23H2PHjmX9+vWcf/753HLLLQwbNoxbbrmlbR+smW1TFd8Dbzwf+MaNG6mpqWH48OFbPL/xfODvvvsuo0ePZty4cUBhPvAlS5YwYMAAVqxYwdFHH80ZZ5zRMB/4448/vtV1bZ4P/K677mL8+PE8/PDDXH311YwcOZK6ujr69+/fMB94r169uPTSS7nssss4//zzP9DWunXrOPnkk3nggQfYY489OP7445t9z5kzZ3L//fez66678sYbb9C9e3dmzpxJbW0tV1555VbXbmbto+IDvBLmA3/qqacYMGBAwyP9J554IrNnz/7AeaNHj2by5Mkcd9xxDXOHm1nHVfEBviWdcT7w1vz4xz/mscce45577mH48OEN0+maWcdU8WPglTAf+MCBA1mxYgXPPfccwBZD/7nnnuMTn/gEM2fOpKqqipdeeonevXuzZs2aTGs3s2x0vB54O9/2Vwnzgffo0aPh79GzZ0/GjBnTbCifc845PPPMM0QEhx56KPvttx+77bYbl1xyCcOGDePcc8/d4vi5mbU/zwfehOcD3/Y62vfc0uD5wD0feLvxfOBmtq21OoQi6VrgSODViBhc3PcvwC1ANbACOC4iPrhoYoI8H7iZpWJrxsCvA64Erm+0bzrw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\n",
+      "text/plain": [
+       "<Figure size 432x288 with 1 Axes>"
+      ]
+     },
+     "metadata": {
+      "needs_background": "light"
+     },
+     "output_type": "display_data"
+    }
+   ],
+   "source": [
+    "queryTimeDF =noDistQueryTimes.join(distQueryTimes)\n",
+    "queryTimeDF.plot.bar()\n",
+    "plt.show()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 17,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "image/png": "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\n",
+      "text/plain": [
+       "<Figure size 432x288 with 1 Axes>"
+      ]
+     },
+     "metadata": {
+      "needs_background": "light"
+     },
+     "output_type": "display_data"
+    }
+   ],
+   "source": [
+    "improvementDF = queryTimeDF[\"distImprovement\"] =100.0*(queryTimeDF['queryTime_nodist']-queryTimeDF['queryTime_dist'])/queryTimeDF['queryTime_nodist']\n",
+    "improvementDF.plot.bar(title=\"% dist Improvement by query\")\n",
+    "plt.show()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.7.7"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 2
+}
