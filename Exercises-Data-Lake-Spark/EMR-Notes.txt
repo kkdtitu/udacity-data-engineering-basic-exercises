@@ -36,6 +36,7 @@ hdfs dfs -copyFromLocal people-sql-filter-select-groupby.json
 hdfs dfs -copyFromLocal biostats-sql-filter-select-groupby.csv
 hdfs dfs -rm -r csv_sql_dir
 hdfs dfs -rm -r json_sql_dir
+which spark-submit
 spark-submit basic-sql-filter-select-groupby.py > run
 
 
