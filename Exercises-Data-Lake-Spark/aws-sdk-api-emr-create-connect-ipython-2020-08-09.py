@@ -23,7 +23,9 @@ EMR_SLAVE_INSTANCE_COUNT            = config.get('EMR','EMR_SLAVE_INSTANCE_COUNT
 EMR_EC2_KEY_NAME                    = config.get('EMR','EMR_EC2_KEY_NAME')
 EMR_JOB_FLOW_ROLE                   = config.get('EMR','EMR_JOB_FLOW_ROLE')
 EMR_SERVICE_ROLE                    = config.get('EMR','EMR_SERVICE_ROLE')
-
+EMR_MASTER_SG                       = config.get('EMR', 'EMR_MASTER_SG')
+EMR_SLAVE_CORE_SG                   = config.get('EMR', 'EMR_SLAVE_CORE_SG')
+EMR_EC2_SUBNETID                    = config.get('EMR', 'EMR_EC2_SUBNETID')
 
 """
 ec2 = boto3.resource('ec2',
@@ -155,6 +157,8 @@ try:
             'Name': 'Spark' 
             #'Version': '2.4.5'   #cannot specify version for application 'Spark' when release label is used.
             },
+            {'Name': 'Livy'},
+            {'Name': 'Hadoop'}
         ],
         Instances={
             'InstanceGroups': [
@@ -173,10 +177,12 @@ try:
                     'InstanceCount': int(EMR_SLAVE_INSTANCE_COUNT),
                 }
             ],
-            'Ec2KeyName': EMR_EC2_KEY_NAME,
+            'Ec2KeyName': EMR_EC2_KEY_NAME,  
             'KeepJobFlowAliveWhenNoSteps': True,
-            'TerminationProtected': False
-            #'Ec2SubnetId': 'subnet-id',
+            'TerminationProtected': False,
+            'EmrManagedMasterSecurityGroup': EMR_MASTER_SG,
+            'EmrManagedSlaveSecurityGroup': EMR_SLAVE_CORE_SG,
+            'Ec2SubnetId': EMR_EC2_SUBNETID,
         },
         #Steps=[
         #    {

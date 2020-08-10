@@ -2,7 +2,9 @@
        pip3 install matplotlib
        jupyter notebook
        pip3 install boto3	
-  668  ipython3 aws-sdk-api.py
+       python3 --version
+       ipython3 --version
+  668  ipython3 aws-sdk-api.py  
   671  boto3 --version
   674  pip3 list
   677  pip3 list | more
