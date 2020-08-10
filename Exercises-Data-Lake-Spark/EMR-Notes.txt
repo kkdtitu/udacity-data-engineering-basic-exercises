@@ -1,31 +1,33 @@
-Execute python code for EMR cluster creation:
+A. Execute python code for EMR cluster creation:
 --------------------------------------------
 use either 'python3' or 'ipython3'
+python3 aws-sdk-api-emr-create-connect-ipython.py
+ipython3 aws-sdk-api-emr-create-connect-ipython.py
+For the .py cluster creation code, ensure B1, B3,  D1, D2
 
-
-SSH to Master node:
+B. SSH to Master node:
 ------------------
 https://stackoverflow.com/questions/39095655/operation-timed-out-error-on-trying-to-ssh-in-to-the-amazon-emr-spark-cluster
 https://99robots.com/how-to-fix-permission-error-ssh-amazon-ec2-instance/
-(1) Should have an EC2 key pair attached to cluster during cluster creation
-(2) The private pem file should be set to 400 mode with chmod command
-(3) Ensure that the Security Group of master node inbound rule allows TCP/SSH (port 22) connection from anywhere
+(B1) Should have an EC2 key pair attached to cluster during cluster creation
+(B2) The private pem file should be set to 400 mode with chmod command
+(B3) Ensure that the Security Group used for master node, has an inbound rule added that allows TCP/SSH (port 22) connection from anywhere
     If required add the following inbound rule to the master SG.
     Type: SSH, Protocol: TCP, Port: 22, Source: 0.0.0.0/0 (IPv4), ::/0 (IPv6)
 
 
-ssh -i ../../../../AWS/kkd-pem-us-west-1.pem hadoop@ec2-52-53-196-66.us-west-1.compute.amazonaws.com  
+(B4) ssh -i ../../../../AWS/kkd-pem-us-west-1.pem hadoop@ec2-52-53-196-66.us-west-1.compute.amazonaws.com  
 
-Running Spark job in EMR cluster master:
+C. Running Spark job in EMR cluster master:
 ---------------------------------------
-(1) Copy files from macbook
+(C1) Copy files from macbook
 scp -i /Users/ronakronik/Documents/KKD/Technical/AWS/kkd-pem-us-west-1.pem biostats-sql-filter-select-groupby.csv  hadoop@ec2-54-183-203-160.us-west-1.compute.amazonaws.com:
 scp -i /Users/ronakronik/Documents/KKD/Technical/AWS/kkd-pem-us-west-1.pem people-sql-filter-select-groupby.json  hadoop@ec2-54-183-203-160.us-west-1.compute.amazonaws.com:
 scp -i /Users/ronakronik/Documents/KKD/Technical/AWS/kkd-pem-us-west-1.pem basic-sql-filter-select-groupby.py hadoop@ec2-54-183-203-160.us-west-1.compute.amazonaws.com:
 
-(2) Then ssh to EMR master ssh -i /Users/ronakronik/Documents/KKD/Technical/AWS/kkd-pem-us-west-1.pem hadoop@ec2-54-183-203-160.us-west-1.compute.amazonaws.com
+(C2) Then ssh to EMR master ssh -i /Users/ronakronik/Documents/KKD/Technical/AWS/kkd-pem-us-west-1.pem hadoop@ec2-54-183-203-160.us-west-1.compute.amazonaws.com
 
-(3) After ssh to master, run the following in EMR master:
+(C3) After ssh to master, run the following in EMR master:
 ls -ltr
 hdfs dfs
 hdfs dfs -ls
@@ -37,7 +39,7 @@ hdfs dfs -rm -r json_sql_dir
 spark-submit basic-sql-filter-select-groupby.py > run
 
 
-Notebook:
+D. Notebook:
 ---------
 https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-managed-notebooks-create.html
 https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-managed-notebooks.html
@@ -45,12 +47,27 @@ https://docs.aws.amazon.com/emr/latest/ReleaseGuide/emr-livy.html
 https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-managed-notebooks-service-role.html
 https://console.aws.amazon.com/iam/home?region=us-west-1#/roles/EMR_Notebooks_DefaultRole
 
-(1) Ensure that the services/applications Spark, Hadoop and Livy are included in the EMR cluster launch python code
-(2) Ec2SubnetId will have to be specified (with a public facing Network ACL) in the EMR cluster launch python code so 
+(D1) Ensure that the services/applications Spark, Hadoop and Livy are included in the EMR cluster launch python code
+(D2) Ec2SubnetId will have to be specified (with a public facing Network ACL) in the EMR cluster launch python code so 
 that the EMR is launched in that VPC/SubnetId
-(3) Jupyter Notebook cannot be launched using CLI or SDK. Use AWS console
-(4) When creating the Notebook using console, choose:
+(D3) Jupyter Notebook cannot be launched using CLI or SDK. Use AWS console
+(D4) When creating the Notebook using console, choose:
 	An exisitng EMR cluster
 	SG: Default SG
 	IAM Role: EMR_Notebooks_DefaultRole (and NOT EMR_DefaultRole) because the IAM policy AmazonElasticMapReduceEditorsRole 
-	(included in the IAM role 'EMR_Notebooks_DefaultRole' is required for Notebook    
+	(included in the IAM role 'EMR_Notebooks_DefaultRole' is required for Notebook 
+
+E. Use all other app user interfaces
+------------------------------------
+https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-ssh-tunnel-local.html
+Since only port 22 has been opened for SSH inbound traffic, for other ports we have to use SSH tunnel. So in E1 below, all traffic from EMR
+master port 8088 will be SSH tunneled to local port 8157
+(E1) In the local macbook run (8157 is a random available port on local mac):
+ssh -i /Users/ronakronik/Documents/KKD/Technical/AWS/kkd-pem-us-west-1.pem -N -L 8157:ec2-54-183-203-160.us-west-1.compute.amazonaws.com:8088 hadoop@ec2-54-183-203-160.us-west-1.compute.amazonaws.com
+Then in the browser, open http://localhost:8157/
+(E2) ssh -i /Users/ronakronik/Documents/KKD/Technical/AWS/kkd-pem-us-west-1.pem -N -L 8157:ec2-54-183-203-160.us-west-1.compute.amazonaws.com:8998 hadoop@ec2-54-183-203-160.us-west-1.compute.amazonaws.com 
+Then in the browser, open http://localhost:8157/
+(E3) ssh -i /Users/ronakronik/Documents/KKD/Technical/AWS/kkd-pem-us-west-1.pem -N -L 8157:ec2-54-183-203-160.us-west-1.compute.amazonaws.com:18080 hadoop@ec2-54-183-203-160.us-west-1.compute.amazonaws.com 
+Then in the browser, open http://localhost:8157/
+(E4) ssh -i /Users/ronakronik/Documents/KKD/Technical/AWS/kkd-pem-us-west-1.pem -N -L 8157:ec2-54-183-203-160.us-west-1.compute.amazonaws.com:50070 hadoop@ec2-54-183-203-160.us-west-1.compute.amazonaws.com
+Then in the browser, open http://localhost:8157/
