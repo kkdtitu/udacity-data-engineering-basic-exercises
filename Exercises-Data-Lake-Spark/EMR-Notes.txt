@@ -63,12 +63,16 @@ E. Use all other app user interfaces
 https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-ssh-tunnel-local.html
 Since only port 22 has been opened for SSH inbound traffic, for other ports we have to use SSH tunnel. So in E1 below, all traffic from EMR
 master port 8088 will be SSH tunneled to local port 8157
-(E1) In the local macbook run (8157 is a random available port on local mac):
+(E1) EMR master port 8088 is the resource manager 
+In the local macbook run (8157 is a random available port on local mac):
 ssh -i /Users/ronakronik/Documents/KKD/Technical/AWS/kkd-pem-us-west-1.pem -N -L 8157:ec2-54-183-203-160.us-west-1.compute.amazonaws.com:8088 hadoop@ec2-54-183-203-160.us-west-1.compute.amazonaws.com
 Then in the browser, open http://localhost:8157/
-(E2) ssh -i /Users/ronakronik/Documents/KKD/Technical/AWS/kkd-pem-us-west-1.pem -N -L 8157:ec2-54-183-203-160.us-west-1.compute.amazonaws.com:8998 hadoop@ec2-54-183-203-160.us-west-1.compute.amazonaws.com 
+(E2) EMR master port 8998 is Livy 
+ssh -i /Users/ronakronik/Documents/KKD/Technical/AWS/kkd-pem-us-west-1.pem -N -L 8157:ec2-54-183-203-160.us-west-1.compute.amazonaws.com:8998 hadoop@ec2-54-183-203-160.us-west-1.compute.amazonaws.com 
 Then in the browser, open http://localhost:8157/
-(E3) ssh -i /Users/ronakronik/Documents/KKD/Technical/AWS/kkd-pem-us-west-1.pem -N -L 8157:ec2-54-183-203-160.us-west-1.compute.amazonaws.com:18080 hadoop@ec2-54-183-203-160.us-west-1.compute.amazonaws.com 
+(E3) EMR master port 18080 is the Spark history server  
+ssh -i /Users/ronakronik/Documents/KKD/Technical/AWS/kkd-pem-us-west-1.pem -N -L 8157:ec2-54-183-203-160.us-west-1.compute.amazonaws.com:18080 hadoop@ec2-54-183-203-160.us-west-1.compute.amazonaws.com 
 Then in the browser, open http://localhost:8157/
-(E4) ssh -i /Users/ronakronik/Documents/KKD/Technical/AWS/kkd-pem-us-west-1.pem -N -L 8157:ec2-54-183-203-160.us-west-1.compute.amazonaws.com:50070 hadoop@ec2-54-183-203-160.us-west-1.compute.amazonaws.com
+(E4) EMR master port 50070 is the HDFS name server 
+ssh -i /Users/ronakronik/Documents/KKD/Technical/AWS/kkd-pem-us-west-1.pem -N -L 8157:ec2-54-183-203-160.us-west-1.compute.amazonaws.com:50070 hadoop@ec2-54-183-203-160.us-west-1.compute.amazonaws.com
 Then in the browser, open http://localhost:8157/
