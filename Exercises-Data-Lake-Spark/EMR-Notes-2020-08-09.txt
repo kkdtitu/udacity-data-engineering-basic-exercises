@@ -18,17 +18,26 @@ https://99robots.com/how-to-fix-permission-error-ssh-amazon-ec2-instance/
 
 (B4) ssh -i ../../../../AWS/kkd-pem-us-west-1.pem hadoop@ec2-52-53-196-66.us-west-1.compute.amazonaws.com  
 
-C. Running Spark job in EMR cluster master:
+C. Running Spark jobs in EMR cluster master:
 ---------------------------------------
-(C1) Copy files from macbook
+(C1) Copy files from macbook /Users/ronakronik/Documents/KKD/Technical/pyspark-basic/Pyspark
 scp -i /Users/ronakronik/Documents/KKD/Technical/AWS/kkd-pem-us-west-1.pem biostats-sql-filter-select-groupby.csv  hadoop@ec2-54-183-203-160.us-west-1.compute.amazonaws.com:
 scp -i /Users/ronakronik/Documents/KKD/Technical/AWS/kkd-pem-us-west-1.pem people-sql-filter-select-groupby.json  hadoop@ec2-54-183-203-160.us-west-1.compute.amazonaws.com:
 scp -i /Users/ronakronik/Documents/KKD/Technical/AWS/kkd-pem-us-west-1.pem basic-sql-filter-select-groupby.py hadoop@ec2-54-183-203-160.us-west-1.compute.amazonaws.com:
 
+scp -i /Users/ronakronik/Documents/KKD/Technical/AWS/kkd-pem-us-west-1.pem basic-sql-udf-matplotlib.py hadoop@ec2-54-183-203-160.us-west-1.compute.amazonaws.com:
+scp -i /Users/ronakronik/Documents/KKD/Technical/AWS/kkd-pem-us-west-1.pem biostats-sql-udf-matplotlib.csv hadoop@ec2-54-183-203-160.us-west-1.compute.amazonaws.com:
+scp -i /Users/ronakronik/Documents/KKD/Technical/AWS/kkd-pem-us-west-1.pem people_orient_columns.json hadoop@ec2-54-183-203-160.us-west-1.compute.amazonaws.com:
+scp -i /Users/ronakronik/Documents/KKD/Technical/AWS/kkd-pem-us-west-1.pem basic-sql-window-function.py hadoop@ec2-54-183-203-160.us-west-1.compute.amazonaws.com:
+
+
 (C2) Then ssh to EMR master ssh -i /Users/ronakronik/Documents/KKD/Technical/AWS/kkd-pem-us-west-1.pem hadoop@ec2-54-183-203-160.us-west-1.compute.amazonaws.com
 
 (C3) After ssh to master, run the following in EMR master (EMR spark will assume source files are in HDFS file system):
+     Also any output file/dir from within pyspark will be under HDFS
 ls -ltr
+sudo pip3 install pandas 
+sudo pip3 install matplotlib
 hdfs dfs
 hdfs dfs -ls
 hdfs dfs -df
@@ -38,6 +47,15 @@ hdfs dfs -rm -r csv_sql_dir
 hdfs dfs -rm -r json_sql_dir
 which spark-submit
 spark-submit basic-sql-filter-select-groupby.py > run
+
+hdfs dfs -copyFromLocal biostats-sql-udf-matplotlib.csv
+hdfs dfs -copyFromLocal people_orient_columns.json 
+hdfs dfs -ls
+spark-submit basic-sql-udf-matplotlib.py > run
+hdfs dfs -rm -r csv_sql_udf_matplotlib_dir
+hdfs dfs -rm -r json_sql_udf_matplotlib_dir
+spark-submit basic-sql-window-function.py > run
+exit
 
 
 D. Notebook:

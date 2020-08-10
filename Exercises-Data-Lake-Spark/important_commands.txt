@@ -1,7 +1,9 @@
        pip3 install notebook
        pip3 install matplotlib
+       sudo pip3 install pandas
        jupyter notebook
        pip3 install boto3	
+       sudo pip3 install boto3
        python3 --version
        ipython3 --version
   671  boto3 --version
