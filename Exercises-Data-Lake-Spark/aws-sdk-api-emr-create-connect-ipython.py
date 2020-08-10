@@ -13,12 +13,18 @@ config.read_file(open('emr.cfg'))
 
 #KEY                             = config.get('AWS','KEY')
 #SECRET                          = config.get('AWS','SECRET')
-EMR_IAM_ROLE_NAME_CONSOLE       = config.get('EMR', 'EMR_IAM_ROLE_NAME_CONSOLE')
-EMR_IAM_ROLE_NAME               = config.get('EMR', 'EMR_IAM_ROLE_NAME')
-
-EMR_CLUSTER_TYPE                = config.get('EMR','EMR_CLUSTER_TYPE')
-EMR_NODE_TYPE                   = config.get('EMR','EMR_NODE_TYPE')
-EMR_NUM_NODES                   = config.get('EMR','EMR_NUM_NODES')
+EMR_CLUSTER_NAME                    = config.get('EMR','EMR_CLUSTER_NAME')
+EMR_LOG_URI                         = config.get('EMR','EMR_LOG_URI')
+EMR_RELEASE_LABEL                   = config.get('EMR','EMR_RELEASE_LABEL')
+EMR_MASTER_INSTANCE_TYPE            = config.get('EMR','EMR_MASTER_INSTANCE_TYPE')
+EMR_SLAVE_INSTANCE_TYPE             = config.get('EMR','EMR_SLAVE_INSTANCE_TYPE')
+EMR_MASTER_INSTANCE_COUNT           = config.get('EMR','EMR_MASTER_INSTANCE_COUNT')
+EMR_SLAVE_INSTANCE_COUNT            = config.get('EMR','EMR_SLAVE_INSTANCE_COUNT')
+EMR_EC2_KEY_NAME                    = config.get('EMR','EMR_EC2_KEY_NAME')
+EMR_JOB_FLOW_ROLE                   = config.get('EMR','EMR_JOB_FLOW_ROLE')
+EMR_SERVICE_ROLE                    = config.get('EMR','EMR_SERVICE_ROLE')
+EMR_MASTER_SG                       = config.get('EMR', 'EMR_MASTER_SG')
+EMR_SLAVE_CORE_SG                   = config.get('EMR', 'EMR_SLAVE_CORE_SG')
 
 
 """
@@ -138,16 +144,18 @@ except Exception as e:
     print(e)
 """
 
+
 print("Now creating EMR cluster: ")
 try:
     # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/emr.html#EMR.Client.run_job_flow
     cluster_id = emr.run_job_flow(
-        Name='kkd_emr_udacity',
-        LogUri='s3://aws-logs-311694234399-us-west-1/elasticmapreduce/',
-        ReleaseLabel='emr-5.30.1',
+        Name=EMR_CLUSTER_NAME,
+        LogUri=EMR_LOG_URI,
+        ReleaseLabel=EMR_RELEASE_LABEL,
         Applications=[
             {
-            'Name': 'Spark'
+            'Name': 'Spark' 
+            #'Version': '2.4.5'   #cannot specify version for application 'Spark' when release label is used.
             },
         ],
         Instances={
@@ -156,20 +164,22 @@ try:
                     'Name': "Master",
                     'Market': 'ON_DEMAND',
                     'InstanceRole': 'MASTER',
-                    'InstanceType': 'm5.xlarge',
-                    'InstanceCount': 1,
+                    'InstanceType': EMR_MASTER_INSTANCE_TYPE,
+                    'InstanceCount': int(EMR_MASTER_INSTANCE_COUNT),
                 },
                 {
                     'Name': "Slave",
                     'Market': 'ON_DEMAND',
                     'InstanceRole': 'CORE',
-                    'InstanceType': 'm5.xlarge',
-                    'InstanceCount': 1,
+                    'InstanceType': EMR_SLAVE_INSTANCE_TYPE,
+                    'InstanceCount': int(EMR_SLAVE_INSTANCE_COUNT),
                 }
             ],
-            'Ec2KeyName': 'kkd-pem-us-west-1',
+            'Ec2KeyName': EMR_EC2_KEY_NAME,  
             'KeepJobFlowAliveWhenNoSteps': True,
-            'TerminationProtected': False
+            'TerminationProtected': False,
+            'EmrManagedMasterSecurityGroup': EMR_MASTER_SG,
+            'EmrManagedSlaveSecurityGroup': EMR_SLAVE_CORE_SG,
             #'Ec2SubnetId': 'subnet-id',
         },
         #Steps=[
@@ -183,8 +193,8 @@ try:
         #    }
         #],
         VisibleToAllUsers=True,
-        JobFlowRole='EMR_EC2_DefaultRole',
-        ServiceRole='EMR_DefaultRole',
+        JobFlowRole=EMR_JOB_FLOW_ROLE,
+        ServiceRole=EMR_SERVICE_ROLE,
         Tags=[
             {
                 'Key': 'tag_name_1',
@@ -230,8 +240,10 @@ print("cluster_state_change_reason = ", cluster_state_change_reason)
 ifdeletecluster = input("Do you want to deleter cluster ? ")
 ifdeletecluster = ifdeletecluster.lower()
 
-if "yes" or "y" in ifdeletecluster:
+print("ifdeletecluster = ", ifdeletecluster)
+if "yes" in ifdeletecluster:
     try:
+        print("Trying to delete cluster ")
         emr.terminate_job_flows( 
             JobFlowIds=[
                 cluster_id.get('JobFlowId')

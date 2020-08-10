@@ -1,0 +1,9 @@
+SSH to Master node:
+https://stackoverflow.com/questions/39095655/operation-timed-out-error-on-trying-to-ssh-in-to-the-amazon-emr-spark-cluster
+https://99robots.com/how-to-fix-permission-error-ssh-amazon-ec2-instance/
+(1) Should have an EC2 key pair attached to cluster during cluster creation
+(2) The private pem file should be set to 400 mode with chmod command
+(3) Ensure that the Security Group of master node inbound rule allows TCP/SSH (port 22) connection from anywhere
+    Type: SSH, Protocol: TCP, Port: 22, Source: 0.0.0.0/0 (IPv4), ::/0 (IPv6)
+
+ssh -i ../../../../AWS/kkd-pem-us-west-1.pem hadoop@ec2-52-53-196-66.us-west-1.compute.amazonaws.com  
