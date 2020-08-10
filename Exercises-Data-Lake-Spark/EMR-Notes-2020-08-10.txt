@@ -27,7 +27,7 @@ scp -i /Users/ronakronik/Documents/KKD/Technical/AWS/kkd-pem-us-west-1.pem basic
 
 (C2) Then ssh to EMR master ssh -i /Users/ronakronik/Documents/KKD/Technical/AWS/kkd-pem-us-west-1.pem hadoop@ec2-54-183-203-160.us-west-1.compute.amazonaws.com
 
-(C3) After ssh to master, run the following in EMR master:
+(C3) After ssh to master, run the following in EMR master (EMR spark will assume source files are in HDFS file system):
 ls -ltr
 hdfs dfs
 hdfs dfs -ls
