@@ -1,3 +1,4 @@
+       ls -altr | grep .py | grep api
        sudo pip3 install jupyterlab
        # sudo pip3 install notebook
        pip3 install matplotlib
